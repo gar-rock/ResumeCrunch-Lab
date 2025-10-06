@@ -1,22 +1,40 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-  <meta charset="UTF-8">
-  <title>Document</title>
-  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
-  <meta name="description" content="Description">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
-  <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/docsify@4/lib/themes/vue.css">
+    <meta charset="UTF-8">
+    <title>ResumeCrunch Security Demo</title>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+    <meta name="description" content="Educational vulnerable web application for learning security concepts">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
+    <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/docsify@4/lib/themes/vue.css">
 </head>
+
 <body>
-  <div id="app"></div>
-  <script>
-    window.$docsify = {
-      name: '',
-      repo: ''
-    }
-  </script>
-  <!-- Docsify v4 -->
-  <script src="//cdn.jsdelivr.net/npm/docsify@4"></script>
+    <div id="app"></div>
+    <script>
+        window.$docsify = {
+            name: 'ResumeCrunch Security Lab',
+            repo: 'gar-rock/ResumeCrunch-Lab',
+            loadSidebar: true,
+            subMaxLevel: 3,
+            auto2top: true,
+            coverpage: false,
+            search: {
+                placeholder: 'Search...',
+                noData: 'No results found',
+                depth: 3
+            }
+        }
+    </script>
+    <!-- Docsify v4 -->
+    <script src="//cdn.jsdelivr.net/npm/docsify@4"></script>
+    <!-- Search plugin -->
+    <script src="//cdn.jsdelivr.net/npm/docsify@4/lib/plugins/search.min.js"></script>
+    <!-- Prism for syntax highlighting -->
+    <script src="//cdn.jsdelivr.net/npm/prismjs@1/components/prism-bash.min.js"></script>
+    <script src="//cdn.jsdelivr.net/npm/prismjs@1/components/prism-python.min.js"></script>
+    <script src="//cdn.jsdelivr.net/npm/prismjs@1/components/prism-json.min.js"></script>
 </body>
+
 </html>
