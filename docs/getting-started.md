@@ -52,8 +52,7 @@ The `-d` flag runs the containers in detached mode (in the background).
 
 Once the containers are running, you can access the application at:
 
-- **Application**: http://localhost:8080 (adjust port as configured)
-- **API Documentation**: http://localhost:8080/api/docs (if available)
+- **Application**: http://localhost:8080 
 
 ### 4. View Logs
 
