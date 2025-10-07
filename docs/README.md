@@ -25,8 +25,6 @@ This lab demonstrates real-world security vulnerabilities and attack scenarios i
 Use the sidebar to navigate through the different sections:
 
 - **[Getting Started](getting-started.md)** - How to set up and run the application
-- **[Vulnerabilities](vulnerabilities.md)** - Detailed breakdown of each security flaw
-- **[Security Best Practices](security-best-practices.md)** - How to prevent these issues
 - **[Learning Objectives](learning-objectives.md)** - What you should take away from this lab
 
 ## Target Audience
