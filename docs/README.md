@@ -41,4 +41,5 @@ Use the sidebar to navigate through the different sections:
 ---
 
 **Conference:** OzSec2025  
-**Repository:** [gar-rock/ResumeCrunch-Lab](https://github.com/gar-rock/ResumeCrunch-Lab)
+**Repository for Lab:** [gar-rock/ResumeCrunch-Lab](https://github.com/gar-rock/ResumeCrunch-Lab)
+**Repository for Application:** [gar-rock/ResumeCrunch](https://github.com/gar-rock/ResumeCrunch)
