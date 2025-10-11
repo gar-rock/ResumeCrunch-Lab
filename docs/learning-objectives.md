@@ -38,6 +38,4 @@ Understanding these vulnerabilities in a controlled environment helps you:
 
 - Only test systems you own or have explicit written permission to test
 - Follow responsible disclosure practices when finding real vulnerabilities
-- Respect bug bounty program rules and scope
 - Never use these techniques for malicious purposes
-- Consider obtaining certifications (CEH, OSCP, etc.) to formalize your skills
